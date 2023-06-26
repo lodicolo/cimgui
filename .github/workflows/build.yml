@@ -1,4 +1,4 @@
-name: Build
+name: Build and Publish
 
 on:
   push: {}
@@ -6,17 +6,30 @@ on:
   schedule:
     - cron:  '0 9 * * 1'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # os: [ubuntu-latest]
+        # os: [ubuntu-latest, windows-latest]
         os: [ubuntu-latest, macOS-latest, windows-latest]
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v3
+
+    - name: Cache Binaries
+      uses: actions/cache@v3
+      id: cache-binaries
+      with:
+        key: ${{ runner.os }}-binaries-${{ hashFiles('**/*.c*') }}-${{ hashFiles('**/*.h*') }}-${{ hashFiles('**/CMakeLists*') }}-${{ hashFiles('**/*.sh') }}
+        path: cmake-build-*
 
     - name: Install Dependencies
+      if: steps.cache-binaries.outputs.cache-hit != 'true'
       shell: bash
       env:
         GITHUB_OS: ${{ matrix.os }}
@@ -35,43 +48,88 @@ jobs:
         fi
 
     - name: Download Submodules
+      if: steps.cache-binaries.outputs.cache-hit != 'true' && github.event_name != 'schedule'
       run: |
         git submodule update --init --recursive
-      if: github.event_name != 'schedule'
 
     - name: Download Latest ImGui
+      if: steps.cache-binaries.outputs.cache-hit != 'true' && github.event_name == 'schedule'
       shell: bash
       run: |
         rm -rf imgui
         git clone https://github.com/ocornut/imgui.git
-      if: github.event_name == 'schedule'
 
     - name: Generate Bindings
+      if: steps.cache-binaries.outputs.cache-hit != 'true'
       shell: bash
       run: |
         cd ./generator
         bash ./generator.sh
 
-    - name: CMake
-      run: |
-        mkdir cmake-build
-        cd cmake-build
-        cmake -DCIMGUI_TEST=1 ..
-
     - name: Build
-      working-directory: cmake-build
-      run: |
-        cmake --build .
+      if: steps.cache-binaries.outputs.cache-hit != 'true'
+      shell: bash
+      run: ./build.sh
 
     - name: Test
-      shell: bash
+      if: steps.cache-binaries.outputs.cache-hit != 'true'
       env:
         GITHUB_OS: ${{ matrix.os }}
-      working-directory: cmake-build
-      run: |
-        if [ "$GITHUB_OS" == "windows-latest" ];
-        then
-          ./Debug/cimgui_test.exe
-        else
-          ./cimgui_test
-        fi
+      shell: bash
+      run: ./test.sh
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts-${{ runner.os }}
+        if-no-files-found: error
+        retention-days: 1
+        path: |
+          cmake-build-debug/*/libcimguid.*
+          cmake-build-release/*/libcimgui.*
+          cmake-build-debug/*/Debug/cimguid.dll
+          cmake-build-release/*/Release/cimgui.dll
+
+  publish:
+    needs: [build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Aggregate Build Artifacts
+        env:
+          RUNNER_OS: ${{ runner.os }}
+        run: |
+          mkdir linux-x64 osx osx-arm64 osx-x64 win-x64
+          cp build-artifacts-Linux/cmake-build-*/x86_64/* linux-x64/
+          cp build-artifacts-macOS/cmake-build-*/arm64_x86_64/* osx/
+          cp build-artifacts-macOS/cmake-build-*/arm64/* osx-arm64/
+          cp build-artifacts-macOS/cmake-build-*/x86_64/* osx-x64/
+          cp build-artifacts-Windows/cmake-build-*/x86_64/*/* win-x64/
+          zip -r linux-x64.zip linux-x64/
+          zip -r osx.zip osx/
+          zip -r osx-arm64.zip osx-arm64/
+          zip -r osx-x64.zip osx-x64/
+          zip -r win-x64.zip win-x64/
+
+      - name: Debug output
+        run: ls -R
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: aggregate-binaries
+          if-no-files-found: error
+          retention-days: 1
+          path: "*.zip"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v0.1.15
+        with:
+          files: "*.zip"
+          generate_release_notes: true
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          target_commitish: ${{ github.sha }}

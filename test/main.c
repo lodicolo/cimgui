@@ -24,7 +24,8 @@ int main(void)
   int text_w, text_h;
   ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &text_pixels, &text_w, &text_h, NULL);
 
-  for (int n = 0; n < 20; n++) {
+  for (int n = 0; n < 20; n++)
+  {
     printf("NewFrame() %d\n", n);
 
     ImVec2 display_size;
@@ -33,8 +34,8 @@ int main(void)
     io->DisplaySize = display_size;
     io->DeltaTime = 1.0f / 60.0f;
     igNewFrame();
-    
-    igBegin("mainwindow",NULL,ImGuiWindowFlags_NoTitleBar);
+
+    igBegin("mainwindow", NULL, ImGuiWindowFlags_NoTitleBar);
     static float f = 0.0f;
     igText("Hello World!");
     igSliderFloat("float", &f, 0.0f, 1.0f, "%.3f", 0);
@@ -44,8 +45,9 @@ int main(void)
 
     igRender();
   }
-  printf("%llu\n",ImGuiWindowFlags_NoTitleBar);
-  printf("size: %d\n",sizeof(ImGuiWindowFlags_NoTitleBar));
+
+  printf("%d\n", ImGuiWindowFlags_NoTitleBar);
+  printf("size: %lu\n", sizeof(ImGuiWindowFlags_NoTitleBar));
   printf("DestroyContext()\n");
   igDestroyContext(NULL);
 

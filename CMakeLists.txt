@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.1)
 
 project(cimgui)
 
+set(CMAKE_DEBUG_POSTFIX d)
+
 set (CMAKE_CXX_STANDARD 11)
 
 if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui_tables.cpp)
@@ -49,7 +51,6 @@ endif (WIN32)
 
 target_include_directories(cimgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(cimgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
-set_target_properties(cimgui PROPERTIES PREFIX "")
 target_link_libraries(cimgui ${IMGUI_LIBRARIES})
 
 #install

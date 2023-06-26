@@ -39,3 +39,9 @@ cimgui/x64/
 # Test / Build
 bld/
 build/
+
+# ImGui
+imgui.ini
+
+# CMake/CLion
+cmake-build-*/
